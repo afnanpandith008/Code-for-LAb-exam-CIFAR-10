@@ -1,0 +1,63 @@
+import tensorflow as tf
+from tensorflow.keras import layers, models, optimizers
+from tensorflow.keras.applications import MobileNetV2, ResNet50
+from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+
+# Load CIFAR-10 Dataset
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+x_train, x_test = x_train / 255.0, x_test / 255.0  # Normalize pixel values to [0, 1]
+y_train, y_test = to_categorical(y_train), to_categorical(y_test)
+
+# Parameters to experiment with
+activation_function = "relu"  # Change to "tanh", "sigmoid", etc., to compare
+learning_rate = 0.001         # Experiment with 0.0001, 0.01, etc.
+pretrained_model = MobileNetV2  # Change to ResNet50 for comparison
+epochs = 20
+
+# Load Pretrained Model
+base_model = pretrained_model(
+    weights="imagenet", 
+    include_top=False, 
+    input_shape=(32, 32, 3)
+)
+base_model.trainable = False  # Freeze base model layers
+
+# Build Fine-tuned Model
+model = models.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(128, activation=activation_function),
+    layers.Dense(10, activation="softmax")  # 10 classes for CIFAR-10
+])
+
+# Compile Model
+optimizer = optimizers.Adam(learning_rate=learning_rate)
+model.compile(optimizer=optimizer, loss="categorical_crossentropy", metrics=["accuracy"])
+
+# Train the Model
+history = model.fit(x_train, y_train, validation_data=(x_test, y_test), epochs=epochs, batch_size=64)
+
+# Evaluate Model
+test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=2)
+print(f"Test Accuracy: {test_accuracy:.4f}")
+
+# Plot Training and Validation Accuracy
+plt.plot(history.history['accuracy'], label='Training Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.title('Training vs Validation Accuracy')
+plt.show()
+
+# Unfreeze some base model layers for further fine-tuning
+base_model.trainable = True
+fine_tune_epochs = 10  # Additional training epochs for fine-tuning
+model.compile(optimizer=optimizers.Adam(learning_rate=learning_rate / 10), loss="categorical_crossentropy", metrics=["accuracy"])
+model.fit(x_train, y_train, validation_data=(x_test, y_test), epochs=fine_tune_epochs, batch_size=64)
+
+# Reevaluate the model
+test_loss, test_accuracy = model.evaluate(x_test, y_test, verbose=2)
+print(f"Fine-tuned Test Accuracy: {test_accuracy:.4f}")
